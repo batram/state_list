@@ -2,77 +2,103 @@ use state::Storage;
 use std::fs;
 use std::sync::RwLock;
 
-static LIST_FILE_PATH: Storage<&str> = Storage::new();
-static STATE_LIST: Storage<RwLock<Vec<String>>> = Storage::new();
+pub struct StateList {
+    list_file_path: Storage<&'static str>,
+    state_list: Storage<RwLock<Vec<String>>>,
+}
 
-pub fn load(file_path: &'static str) {
-    let rules = fs::read_to_string(file_path).unwrap_or_else(|e| {
-        println!("Couldn't load file for list: {} {}", file_path, e);
-        return String::new();
-    });
-    LIST_FILE_PATH.set(file_path);
-
-    let mut write_list = Vec::<_>::new();
-    for line in rules.split("\n") {
-        if line.trim() != "" {
-            write_list.push(line.trim().to_string());
+impl StateList {
+    pub const fn new() -> StateList {
+        StateList {
+            list_file_path: Storage::new(),
+            state_list: Storage::new(),
         }
     }
-    STATE_LIST.set(RwLock::new(write_list.clone()));
-}
 
-pub fn add_item(item: String) {
-    let write_list = STATE_LIST.get();
-    match write_list.try_write() {
-        Ok(mut list) => {
-            &list.push(item);
-        }
-        Err(e) => {
-            println!("error adding to list: {}", e);
-        }
-    };
-}
+    pub fn load(&self, file_path: &'static str) {
+        let rules = fs::read_to_string(file_path).unwrap_or_else(|e| {
+            println!("Couldn't load file for list: {} {}", file_path, e);
+            return String::new();
+        });
+        
+        self.list_file_path.set(file_path);
 
-pub fn contains(item: &String) -> bool {
-    let read_list = STATE_LIST.get();
-    return match read_list.try_read() {
-        Ok(list) => list.contains(item),
-        Err(_) => false,
-    };
-}
-
-pub fn get_entries() -> Vec<String>{
-    let mut vecy = Vec::<String>::new();
-
-    let read_list = STATE_LIST.get();
-    match read_list.try_read() {
-        Ok(list) => {
-            for item in &*list {
-                vecy.push((*item).as_str().to_string());
+        let mut write_list = Vec::<_>::new();
+        for line in rules.split("\n") {
+            if line.trim() != "" {
+                write_list.push(line.trim().to_string());
             }
-        },
-        Err(_) => {},
+        }
+        self.state_list.set(RwLock::new(write_list.clone()));
     }
-    return vecy;
-}
-
-pub fn get_list() -> &'static Storage<RwLock<Vec<String>>> {
-    return &STATE_LIST;
-}
-
-pub fn save_state() {
-    let write_list = STATE_LIST.get();
-    let mut rules = String::new();
-    match write_list.try_write() {
-        Ok(list) => {
-            for ignore in &*list {
-                rules.push_str(format!("{}\n", ignore).as_str());
+    
+    pub fn retain_matching(&self, match_fn: fn(&String) -> bool) {
+        let write_list = self.state_list.get();
+        match write_list.try_write() {
+            Ok(mut list) => {
+                list.retain(match_fn);
             }
+            Err(e) => {
+                println!("error adding to list: {}", e);
+            }
+        };
+    }
+    
+    pub fn add_item(&self, item: String) {
+        let write_list = self.state_list.get();
+        match write_list.try_write() {
+            Ok(mut list) => {
+                &list.push(item);
+            }
+            Err(e) => {
+                println!("error adding to list: {}", e);
+            }
+        };
+    }
+    
+    pub fn contains(&self, item: &String) -> bool {
+        let read_list = self.state_list.get();
+        return match read_list.try_read() {
+            Ok(list) => list.contains(item),
+            Err(_) => false,
+        };
+    }
+    
+    pub fn get_entries(&self) -> Vec<String> {
+        let mut vecy = Vec::<String>::new();
+    
+        let read_list = self.state_list.get();
+        match read_list.try_read() {
+            Ok(list) => {
+                for item in &*list {
+                    vecy.push((*item).as_str().to_string());
+                }
+            }
+            Err(_) => {}
         }
-        Err(_) => println!("No access to ignore list."),
-    };
-
-    fs::write(LIST_FILE_PATH.get(), rules.as_bytes()).unwrap_or_else(|e| {
-        println!("Couldn't save IGNORE_FILE: {} {}", LIST_FILE_PATH.get(), e);
-    });
+        return vecy;
+    }
+        
+    pub fn save_matching(&self, match_fn: fn(&String) -> bool) {
+        let write_list = self.state_list.get();
+        let mut rules = String::new();
+        match write_list.try_write() {
+            Ok(list) => {
+                for item in &*list {
+                    if match_fn(item) {
+                        rules.push_str(format!("{}\n", item).as_str());
+                    }
+                }
+            }
+            Err(_) => println!("No access to state list."),
+        };
+    
+        fs::write(self.list_file_path.get(), rules.as_bytes()).unwrap_or_else(|e| {
+            println!("Couldn't save IGNORE_FILE: {} {}", self.list_file_path.get(), e);
+        });
+    }
+    
+    pub fn save_state(&self) {
+        self.save_matching(|_| true);
+    }    
 }
