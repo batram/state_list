@@ -15,12 +15,15 @@ impl StateList {
         }
     }
 
+    pub fn init_empty(&self) {
+        self.state_list.set(RwLock::new(Vec::<_>::new()));
+    }
+
     pub fn load(&self, file_path: &'static str) {
         let rules = fs::read_to_string(file_path).unwrap_or_else(|e| {
             println!("Couldn't load file for list: {} {}", file_path, e);
             return String::new();
         });
-        
         self.list_file_path.set(file_path);
 
         let mut write_list = Vec::<_>::new();
@@ -29,9 +32,9 @@ impl StateList {
                 write_list.push(line.trim().to_string());
             }
         }
-        self.state_list.set(RwLock::new(write_list.clone()));
+        self.state_list.set(RwLock::new(write_list));
     }
-    
+
     pub fn retain_matching(&self, match_fn: fn(&String) -> bool) {
         let write_list = self.state_list.get();
         match write_list.try_write() {
@@ -43,7 +46,7 @@ impl StateList {
             }
         };
     }
-    
+
     pub fn add_item(&self, item: String) {
         let write_list = self.state_list.get();
         match write_list.try_write() {
@@ -55,7 +58,7 @@ impl StateList {
             }
         };
     }
-    
+
     pub fn contains(&self, item: &String) -> bool {
         let read_list = self.state_list.get();
         return match read_list.try_read() {
@@ -63,10 +66,9 @@ impl StateList {
             Err(_) => false,
         };
     }
-    
+
     pub fn get_entries(&self) -> Vec<String> {
         let mut vecy = Vec::<String>::new();
-    
         let read_list = self.state_list.get();
         match read_list.try_read() {
             Ok(list) => {
@@ -78,7 +80,7 @@ impl StateList {
         }
         return vecy;
     }
-        
+
     pub fn save_matching(&self, match_fn: fn(&String) -> bool) {
         let write_list = self.state_list.get();
         let mut rules = String::new();
@@ -92,13 +94,16 @@ impl StateList {
             }
             Err(_) => println!("No access to state list."),
         };
-    
         fs::write(self.list_file_path.get(), rules.as_bytes()).unwrap_or_else(|e| {
-            println!("Couldn't save IGNORE_FILE: {} {}", self.list_file_path.get(), e);
+            println!(
+                "Couldn't save IGNORE_FILE: {} {}",
+                self.list_file_path.get(),
+                e
+            );
         });
     }
     
     pub fn save_state(&self) {
         self.save_matching(|_| true);
-    }    
+    }
 }
