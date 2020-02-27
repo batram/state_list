@@ -81,22 +81,12 @@ impl StateList {
         return vecy;
     }
 
-    pub fn dot_reverse(str: &String) -> String {
-        let mut split = str.split('.').collect::<Vec<&str>>();
-        split.reverse();
-        return split.join(".");
-    }
-
-    pub fn sort_dedup_list(&self){
+    pub fn sort_dedup_list(&self, sorting: fn(&String, &String) -> std::cmp::Ordering){
         let write_list = self.state_list.get();
         match write_list.try_write() {
             Ok(mut list) => {
-                list.sort_by({
-                    |a, b| 
-                    StateList::dot_reverse(a).cmp(&StateList::dot_reverse(b))
-                });
+                list.sort_by(sorting);
                 list.dedup();
-
             },
             Err(_) => println!("No access to state list."),
         }
