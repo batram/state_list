@@ -1,14 +1,15 @@
+#![feature(const_fn)]
 use state::Storage;
 use std::fs;
 use std::sync::RwLock;
 
-pub struct StateList {
+pub struct StateList<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> {
     list_file_path: Storage<&'static str>,
-    state_list: Storage<RwLock<Vec<String>>>,
+    state_list: Storage<RwLock<Vec<T>>>,
 }
 
-impl StateList {
-    pub const fn new() -> StateList {
+impl<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> StateList<T> {
+    pub const fn new() -> StateList<T> {
         StateList {
             list_file_path: Storage::new(),
             state_list: Storage::new(),
@@ -19,23 +20,7 @@ impl StateList {
         self.state_list.set(RwLock::new(Vec::<_>::new()));
     }
 
-    pub fn load(&self, file_path: &'static str) {
-        let rules = fs::read_to_string(file_path).unwrap_or_else(|e| {
-            println!("Couldn't load file for list: {} {}", file_path, e);
-            return String::new();
-        });
-        self.list_file_path.set(file_path);
-
-        let mut write_list = Vec::<_>::new();
-        for line in rules.split("\n") {
-            if line.trim() != "" {
-                write_list.push(line.trim().to_string());
-            }
-        }
-        self.state_list.set(RwLock::new(write_list));
-    }
-
-    pub fn retain_matching(&self, match_fn: fn(&String) -> bool) {
+    pub fn retain_matching(&self, match_fn: fn(&T) -> bool) {
         let write_list = self.state_list.get();
         match write_list.try_write() {
             Ok(mut list) => {
@@ -47,7 +32,7 @@ impl StateList {
         };
     }
 
-    pub fn add_item(&self, item: String) {
+    pub fn add_item(&self, item: T) {
         let write_list = self.state_list.get();
         match write_list.try_write() {
             Ok(mut list) => {
@@ -59,7 +44,7 @@ impl StateList {
         };
     }
 
-    pub fn contains(&self, item: &String) -> bool {
+    pub fn contains(&self, item: &T) -> bool {
         let read_list = self.state_list.get();
         return match read_list.try_read() {
             Ok(list) => list.contains(item),
@@ -67,33 +52,81 @@ impl StateList {
         };
     }
 
-    pub fn get_entries(&self) -> Vec<String> {
-        let mut vecy = Vec::<String>::new();
+    pub fn length(&self) -> usize {
         let read_list = self.state_list.get();
         match read_list.try_read() {
             Ok(list) => {
-                for item in &*list {
-                    vecy.push((*item).as_str().to_string());
-                }
+                return (*list).len();
+            }
+            Err(_) => {
+                return 0;
+            }
+        }
+    }
+
+    pub fn pop(&self) -> Option<T> {
+        let write_list = self.state_list.get();
+        match write_list.try_write() {
+            Ok(mut list) => {
+                return (*list).pop();
+            }
+            Err(_) => {
+                return None;
+            }
+        }
+    }
+
+    pub fn get_entries(&self) -> Vec<T> {
+        let mut vecy = Vec::<T>::new();
+        let read_list = self.state_list.get();
+        match read_list.try_read() {
+            Ok(list) => {
+                vecy = (*list).to_vec();
             }
             Err(_) => {}
         }
         return vecy;
     }
 
-    pub fn sort_dedup_list(&self, sorting: fn(&String, &String) -> std::cmp::Ordering){
+    pub fn sort_dedup_list(&self, sorting: fn(&T, &T) -> std::cmp::Ordering) {
         let write_list = self.state_list.get();
         match write_list.try_write() {
             Ok(mut list) => {
                 list.sort_by(sorting);
                 list.dedup();
-            },
+            }
             Err(_) => println!("No access to state list."),
         }
+    }
+}
 
+impl<T: Send + Sync + 'static
+        + std::cmp::PartialEq
+        + std::clone::Clone
+        + std::fmt::Display
+        + std::str::FromStr,
+    > StateList<T>
+{
+    pub fn load(&self, file_path: &'static str) {
+        let rules = fs::read_to_string(file_path).unwrap_or_else(|e| {
+            println!("Couldn't load file for list: {} {}", file_path, e);
+            return String::new();
+        });
+        self.list_file_path.set(file_path);
+
+        let mut write_list = Vec::<T>::new();
+        for line in rules.split("\n") {
+            if line.trim() != "" {
+                match line.trim().parse() {
+                    Ok(item) => write_list.push(item),
+                    Err(_) => println!("can't parse item from: {}", line),
+                }
+            }
+        }
+        self.state_list.set(RwLock::new(write_list));
     }
 
-    pub fn save_matching(&self, match_fn: fn(&String) -> bool) {
+    pub fn save_matching(&self, match_fn: fn(&T) -> bool) {
         let write_list = self.state_list.get();
         let mut rules = String::new();
         match write_list.try_write() {
@@ -114,7 +147,7 @@ impl StateList {
             );
         });
     }
-    
+
     pub fn save_state(&self) {
         self.save_matching(|_| true);
     }
