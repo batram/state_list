@@ -1,4 +1,5 @@
 #![feature(const_fn)]
+#![feature(vec_remove_item)]
 use state::Storage;
 use std::fs;
 use std::sync::RwLock;
@@ -76,6 +77,16 @@ impl<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> StateLi
         }
     }
 
+    pub fn remove(&self, item: &T) {
+        let write_list = self.state_list.get();
+        match write_list.try_write() {
+            Ok(mut list) => {
+                &list.remove_item(item);
+            }
+            Err(_) => {}
+        }
+    }
+
     pub fn get_entries(&self) -> Vec<T> {
         let mut vecy = Vec::<T>::new();
         let read_list = self.state_list.get();
@@ -113,17 +124,8 @@ impl<T: Send + Sync + 'static
             return String::new();
         });
         self.list_file_path.set(file_path);
-
-        let mut write_list = Vec::<T>::new();
-        for line in rules.split("\n") {
-            if line.trim() != "" {
-                match line.trim().parse() {
-                    Ok(item) => write_list.push(item),
-                    Err(_) => println!("can't parse item from: {}", line),
-                }
-            }
-        }
-        self.state_list.set(RwLock::new(write_list));
+        
+        self.init_string(rules);
     }
 
     pub fn save_matching(&self, match_fn: fn(&T) -> bool) {
@@ -151,4 +153,19 @@ impl<T: Send + Sync + 'static
     pub fn save_state(&self) {
         self.save_matching(|_| true);
     }
+
+    pub fn init_string(&self, instr: String) {
+        let mut write_list = Vec::<T>::new();
+        for line in instr.split("\n") {
+            if line.trim() != "" {
+                match line.trim().parse() {
+                    Ok(item) => write_list.push(item),
+                    Err(_) => println!("can't parse item from: {}", line),
+                }
+            }
+        }
+        self.state_list.set(RwLock::new(write_list));
+
+    }
+
 }
