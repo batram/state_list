@@ -5,7 +5,7 @@ use std::fs;
 use std::sync::RwLock;
 
 pub struct StateList<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> {
-    list_file_path: Storage<&'static str>,
+    list_file_path: Storage<String>,
     state_list: Storage<RwLock<Vec<T>>>,
 }
 
@@ -118,8 +118,8 @@ impl<T: Send + Sync + 'static
         + std::str::FromStr,
     > StateList<T>
 {
-    pub fn load(&self, file_path: &'static str) {
-        let rules = fs::read_to_string(file_path).unwrap_or_else(|e| {
+    pub fn load(&self, file_path: String) {
+        let rules = fs::read_to_string(file_path.clone()).unwrap_or_else(|e| {
             println!("Couldn't load file for list: {} {}", file_path, e);
             return String::new();
         });
