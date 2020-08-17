@@ -3,6 +3,8 @@
 use state::Storage;
 use std::fs;
 use std::sync::RwLock;
+#[macro_use]
+extern crate log;
 
 pub struct StateList<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> {
     list_file_path: Storage<String>,
@@ -28,7 +30,7 @@ impl<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> StateLi
                 list.retain(match_fn);
             }
             Err(e) => {
-                println!("error adding to list: {}", e);
+                warn!("error adding to list: {}", e);
             }
         };
     }
@@ -40,7 +42,7 @@ impl<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> StateLi
                 &list.push(item);
             }
             Err(e) => {
-                println!("error adding to list: {}", e);
+                warn!("error adding to list: {}", e);
             }
         };
     }
@@ -106,7 +108,7 @@ impl<T: Send + Sync + 'static + std::cmp::PartialEq + std::clone::Clone> StateLi
                 list.sort_by(sorting);
                 list.dedup();
             }
-            Err(_) => println!("No access to state list."),
+            Err(_) => warn!("No access to state list."),
         }
     }
 }
@@ -120,7 +122,7 @@ impl<T: Send + Sync + 'static
 {
     pub fn load(&self, file_path: String) {
         let rules = fs::read_to_string(file_path.clone()).unwrap_or_else(|e| {
-            println!("Couldn't load file for list: {} {}", file_path, e);
+            warn!("Couldn't load file for list: {} {}", file_path, e);
             return String::new();
         });
         self.list_file_path.set(file_path);
@@ -139,11 +141,11 @@ impl<T: Send + Sync + 'static
                     }
                 }
             }
-            Err(_) => println!("No access to state list."),
+            Err(_) => warn!("No access to state list."),
         };
         fs::write(self.list_file_path.get(), rules.as_bytes()).unwrap_or_else(|e| {
-            println!(
-                "Couldn't save IGNORE_FILE: {} {}",
+            warn!(
+                "Couldn't save state list: {} {}",
                 self.list_file_path.get(),
                 e
             );
@@ -160,7 +162,7 @@ impl<T: Send + Sync + 'static
             if line.trim() != "" {
                 match line.trim().parse() {
                     Ok(item) => write_list.push(item),
-                    Err(_) => println!("can't parse item from: {}", line),
+                    Err(_) => warn!("can't parse item from: {}", line),
                 }
             }
         }

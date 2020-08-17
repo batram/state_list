@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 state = { version = "0.2", features = ["tls"] }
+log = { version = "0.4" }
